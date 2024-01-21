@@ -30,61 +30,27 @@ function bundling(dest) {
     if (err) throw err;
 
     // собираем html
-    function bundleHtml() {
-      fs.readdir(path.join(__dirname, 'components'), (err, files) => {
-        if (err) throw err;
-
-        fs.readFile(
-          path.join(__dirname, 'template.html'),
-          'utf-8',
-          (err, data) => {
-            if (err) throw err;
-
-            templateHtml = data;
-            compileHtml(dest, files);
-          },
-        );
-      });
-    }
-    bundleHtml();
+    bundleHtml(dest);
 
     // собираем css
-    function bundleCss() {
-      fs.readdir(path.join(__dirname, 'styles'), (err, files) => {
-        if (err) throw err;
-
-        for (let file of files) {
-          fs.stat(path.join(__dirname, 'styles/', file), (err, stat) => {
-            if (err) throw err;
-            if (!stat.isDirectory() && path.extname(file).slice(1) === 'css') {
-              cssCounter += 1;
-
-              fs.readFile(
-                path.join(__dirname, 'styles/', file),
-                'utf-8',
-                (err, data) => {
-                  if (err) throw err;
-
-                  styleCss += data;
-                  cssreadCounter += 1;
-
-                  if (cssreadCounter === cssCounter) {
-                    const output = fs.createWriteStream(
-                      path.join(dest, 'style.css'),
-                    );
-                    output.write(styleCss);
-                  }
-                },
-              );
-            }
-          });
-        }
-      });
-    }
-    bundleCss();
+    bundleCss(dest);
 
     // копируем assets
     copyDir(path.join(__dirname, 'assets'), path.join(destDir, 'assets'));
+  });
+}
+
+function bundleHtml(dest) {
+  fs.readdir(path.join(__dirname, 'components'), (err, files) => {
+    if (err) throw err;
+
+    fs.readFile(path.join(__dirname, 'template.html'), 'utf-8', (err, data) => {
+      if (err) throw err;
+
+      templateHtml = data;
+
+      compileHtml(dest, files);
+    });
   });
 }
 
@@ -121,43 +87,76 @@ function compileHtml(dest, files) {
   }
 }
 
+function bundleCss(dest) {
+  fs.readdir(path.join(__dirname, 'styles'), (err, files) => {
+    if (err) throw err;
+
+    for (let file of files) {
+      fs.stat(path.join(__dirname, 'styles/', file), (err, stat) => {
+        if (err) throw err;
+        if (!stat.isDirectory() && path.extname(file).slice(1) === 'css') {
+          cssCounter += 1;
+
+          fs.readFile(
+            path.join(__dirname, 'styles/', file),
+            'utf-8',
+            (err, data) => {
+              if (err) throw err;
+
+              styleCss += data;
+              cssreadCounter += 1;
+
+              if (cssreadCounter === cssCounter) {
+                const output = fs.createWriteStream(
+                  path.join(dest, 'style.css'),
+                );
+                output.write(styleCss);
+              }
+            },
+          );
+        }
+      });
+    }
+  });
+}
+
 function copyDir(src, dest) {
   fs.access(dest, (err) => {
     if (err) {
       if (err.code === 'ENOENT') {
-        mainLogic();
+        mainLogic(src, dest);
       } else throw err;
     } else {
       fs.rm(dest, { recursive: true, force: true }, (err) => {
         if (err) throw err;
-        mainLogic();
+        mainLogic(src, dest);
       });
     }
   });
+}
 
-  function mainLogic() {
-    fs.mkdir(dest, { recursive: true }, (err) => {
+function mainLogic(src, dest) {
+  fs.mkdir(dest, { recursive: true }, (err) => {
+    if (err) throw err;
+
+    fs.readdir(src, (err, files) => {
       if (err) throw err;
 
-      fs.readdir(src, (err, files) => {
-        if (err) throw err;
+      for (let file of files) {
+        fs.stat(path.join(src, '/', file), (err, stat) => {
+          if (err) throw err;
 
-        for (let file of files) {
-          fs.stat(path.join(src, '/', file), (err, stat) => {
-            if (err) throw err;
-
-            if (!stat.isDirectory())
-              fs.copyFile(
-                path.join(src, '/', file),
-                path.join(dest, '/', file),
-                (err) => {
-                  if (err) throw err;
-                },
-              );
-            else copyDir(path.join(src, '/', file), path.join(dest, '/', file)); // подпапки рекурсивно копируем
-          });
-        }
-      });
+          if (!stat.isDirectory())
+            fs.copyFile(
+              path.join(src, '/', file),
+              path.join(dest, '/', file),
+              (err) => {
+                if (err) throw err;
+              },
+            );
+          else copyDir(path.join(src, '/', file), path.join(dest, '/', file)); // подпапки рекурсивно копируем
+        });
+      }
     });
-  }
+  });
 }
