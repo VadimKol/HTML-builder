@@ -7,16 +7,15 @@ function copyDir(src, dest) {
   // колбэки на колбэках, 5 вложенных вызовов :(
 
   fs.access(dest, (err) => {
-    // если папка dest уже есть, удаляем ее, чтобы учитывать любые изменения в src папке
     if (err) {
+      // если папки нет
       if (err.code === 'ENOENT') {
         mainLogic();
       } else throw err;
     } else {
+      // если папка dest уже есть, удаляем ее, чтобы учитывать любые изменения в src папке
       fs.rm(dest, { recursive: true, force: true }, (err) => {
-        if (err) {
-          throw err;
-        }
+        if (err) throw err;
         mainLogic();
       });
     }
