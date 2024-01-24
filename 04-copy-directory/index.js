@@ -5,6 +5,9 @@ const files_copy = path.join(__dirname, 'files-copy');
 
 async function copyDir(src, dest) {
   try {
+    // возвращает undefined resolve, ошибки не будет, если удалять будет нечего
+    // поэтому проверять доступ к папке не нужно
+    // но если удалить нельзя, то нужно будет очищать содержимое
     await fs.rm(dest, { recursive: true, force: true });
 
     await fs.mkdir(dest, { recursive: true });
