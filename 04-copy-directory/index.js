@@ -1,51 +1,32 @@
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 const files = path.join(__dirname, 'files');
 const files_copy = path.join(__dirname, 'files-copy');
 
-function copyDir(src, dest) {
-  // колбэки на колбэках, 5 вложенных вызовов :(
+async function copyDir(src, dest) {
+  try {
+    await fs.access(dest);
+    await fs.rm(dest, { recursive: true, force: true });
+    mainLogic();
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      mainLogic();
+    } else throw err;
+  }
 
-  fs.access(dest, (err) => {
-    if (err) {
-      // если папки нет
-      if (err.code === 'ENOENT') {
-        mainLogic();
-      } else throw err;
-    } else {
-      // если папка dest уже есть, удаляем ее, чтобы учитывать любые изменения в src папке
-      fs.rm(dest, { recursive: true, force: true }, (err) => {
-        if (err) throw err;
-        mainLogic();
-      });
+  async function mainLogic() {
+    try {
+      await fs.mkdir(dest, { recursive: true });
+      const files = await fs.readdir(src);
+      for (let file of files) {
+        const stat = await fs.stat(path.join(src, '/', file));
+        if (!stat.isDirectory())
+          fs.copyFile(path.join(src, '/', file), path.join(dest, '/', file));
+        else copyDir(path.join(src, '/', file), path.join(dest, '/', file)); // подпапки рекурсивно копируем
+      }
+    } catch (err) {
+      throw err;
     }
-  });
-
-  function mainLogic() {
-    fs.mkdir(dest, { recursive: true }, (err) => {
-      if (err) throw err;
-
-      fs.readdir(src, (err, files) => {
-        if (err) throw err;
-
-        for (let file of files) {
-          fs.stat(path.join(src, '/', file), (err, stat) => {
-            if (err) throw err;
-
-            if (!stat.isDirectory())
-              fs.copyFile(
-                path.join(src, '/', file),
-                path.join(dest, '/', file),
-                (err) => {
-                  if (err) throw err;
-                },
-              );
-            else copyDir(path.join(src, '/', file), path.join(dest, '/', file)); // подпапки рекурсивно копируем
-          });
-        }
-      });
-    });
   }
 }
-
 copyDir(files, files_copy);
