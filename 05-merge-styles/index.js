@@ -1,64 +1,31 @@
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 
-let bundleCss = '';
-let streamCounter = 0;
-let cssCounter = 0;
+(async () => {
+  try {
+    let promises = [];
+    const files = await fs.readdir(path.join(__dirname, 'styles'));
 
-fs.readdir(path.join(__dirname, 'styles'), (err, files) => {
-  if (err) throw err;
+    for (let file of files) {
+      const stat = await fs.stat(path.join(__dirname, 'styles/', file));
 
-  for (let file of files) {
-    fs.stat(path.join(__dirname, 'styles/', file), (err, stat) => {
-      if (err) throw err;
-      if (!stat.isDirectory() && path.extname(file).slice(1) === 'css') {
-        cssCounter += 1;
-        //console.time(file);
-
-        //const rs = fs.createReadStream(
-        //path.join(__dirname, 'styles/', file),
-        //'utf-8',
-        //);
-        // полным куском писать не красиво, теряется вся мощь чанков
-        fs.readFile(
-          path.join(__dirname, 'styles/', file),
-          'utf-8',
-          (err, data) => {
-            if (err) throw err;
-            bundleCss += data;
-            streamCounter += 1;
-            //console.timeEnd(file);
-            if (streamCounter === cssCounter) {
-              const output = fs.createWriteStream(
-                path.join(__dirname, 'project-dist/', 'bundle.css'),
-              );
-              output.write(bundleCss);
-            }
-          },
+      if (!stat.isDirectory() && path.extname(file).slice(1) === 'css')
+        promises.push(
+          // здесь await лучше не писать
+          // нет смысла ждать, а если файлов 500, и среди них большие
+          // нужно асинхронно запустить их все и ждать их всех сразу
+          fs.readFile(path.join(__dirname, 'styles/', file), 'utf-8'),
         );
+    }
 
-        //rs.on('data', (chunk) => (bundleCss += chunk));
+    // вернет результаты из всех промисов
+    const bundleCss = await Promise.all(promises);
 
-        // можно было и через readFile и в колбэке записать тоже самое
-        // косяк, если файлы будут жирные, и чанки будут в перемешку
-        // тогда стили сломаются
-        // либо терять асинхронность, либо делать блокировки для жирного файла
-        /*rs.on('end', () => {
-          streamCounter += 1;
-          console.timeEnd(file);
-          if (streamCounter === cssCounter) {
-            const output = fs.createWriteStream(
-              path.join(__dirname, 'project-dist/', 'bundle.css'),
-            );
-            output.write(bundleCss);
-          }
-          rs.destroy();
-        });
-
-        rs.on('error', (error) => {
-          throw error;
-        });*/
-      }
-    });
+    fs.writeFile(
+      path.join(__dirname, 'project-dist/', 'bundle.css'),
+      bundleCss.join(''),
+    );
+  } catch (err) {
+    console.log(err);
   }
-});
+})();
