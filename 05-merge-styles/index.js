@@ -3,7 +3,7 @@ const fs = require('fs/promises');
 
 (async () => {
   try {
-    let promises = [];
+    const promises = [];
     const files = await fs.readdir(path.join(__dirname, 'styles'));
 
     for (let file of files) {

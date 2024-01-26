@@ -1,162 +1,78 @@
 const path = require('path');
-const fs = require('fs');
+const fs = require('fs/promises');
 
 const destDir = path.join(__dirname, 'project-dist');
+bundling(destDir);
 
-let templateHtml = '';
-let htmlreadCounter = 0;
-let htmlCounter = 0;
-
-let styleCss = '';
-let cssreadCounter = 0;
-let cssCounter = 0;
-
-fs.access(destDir, (err) => {
-  if (err) {
-    if (err.code === 'ENOENT') {
-      bundling(destDir);
-    } else throw err;
-  } else {
-    fs.rm(destDir, { recursive: true, force: true }, (err) => {
-      if (err) throw err;
-      bundling(destDir);
-    });
-  }
-});
-
-function bundling(dest) {
-  // создается папка dest
-  fs.mkdir(dest, { recursive: true }, (err) => {
-    if (err) throw err;
-
-    // собираем html
-    bundleHtml(dest);
-
-    // собираем css
-    bundleCss(dest);
-
-    // копируем assets
-    copyDir(path.join(__dirname, 'assets'), path.join(destDir, 'assets'));
-  });
+async function bundling(dest) {
+  await fs.rm(dest, { recursive: true, force: true });
+  await fs.mkdir(dest, { recursive: true });
+  bundleHtml(dest);
+  bundleCss(dest);
+  copyDir(path.join(__dirname, 'assets'), path.join(destDir, 'assets'));
 }
 
-function bundleHtml(dest) {
-  fs.readdir(path.join(__dirname, 'components'), (err, files) => {
-    if (err) throw err;
-
-    fs.readFile(path.join(__dirname, 'template.html'), 'utf-8', (err, data) => {
-      if (err) throw err;
-
-      templateHtml = data;
-
-      compileHtml(dest, files);
-    });
-  });
-}
-
-function compileHtml(dest, files) {
-  for (let file of files) {
-    fs.stat(path.join(__dirname, 'components/', file), (err, stat) => {
-      if (err) throw err;
-
-      if (!stat.isDirectory() && path.extname(file).slice(1) === 'html') {
-        htmlCounter += 1;
-
-        fs.readFile(
-          path.join(__dirname, 'components/', file),
-          'utf-8',
-          (err, data) => {
-            if (err) throw err;
-            htmlreadCounter += 1;
-
-            templateHtml = templateHtml.replace(
-              new RegExp(`{{${path.parse(file).name}}}`, 'g'),
-              data,
-            );
-
-            if (htmlreadCounter === htmlCounter) {
-              const output = fs.createWriteStream(
-                path.join(dest, 'index.html'),
-              );
-              output.write(templateHtml);
-            }
-          },
-        );
-      }
-    });
-  }
-}
-
-function bundleCss(dest) {
-  fs.readdir(path.join(__dirname, 'styles'), (err, files) => {
-    if (err) throw err;
-
+async function bundleHtml(dest) {
+  try {
+    const promises = [];
+    const files = await fs.readdir(path.join(__dirname, 'components'));
+    let templateHtml = await fs.readFile(
+      path.join(__dirname, 'template.html'),
+      'utf-8',
+    );
     for (let file of files) {
-      fs.stat(path.join(__dirname, 'styles/', file), (err, stat) => {
-        if (err) throw err;
-        if (!stat.isDirectory() && path.extname(file).slice(1) === 'css') {
-          cssCounter += 1;
-
-          fs.readFile(
-            path.join(__dirname, 'styles/', file),
-            'utf-8',
-            (err, data) => {
-              if (err) throw err;
-
-              styleCss += data;
-              cssreadCounter += 1;
-
-              if (cssreadCounter === cssCounter) {
-                const output = fs.createWriteStream(
-                  path.join(dest, 'style.css'),
-                );
-                output.write(styleCss);
-              }
-            },
-          );
-        }
-      });
+      const stat = await fs.stat(path.join(__dirname, 'components/', file));
+      if (!stat.isDirectory() && path.extname(file).slice(1) === 'html')
+        promises.push(
+          fs.readFile(path.join(__dirname, 'components/', file), 'utf-8'),
+        );
     }
-  });
+    // тут есть хитрость, порядок соот-вует тому как запушили
+    // не важно кто самый быстрый
+    const htmlArr = await Promise.all(promises);
+    for (let i = 0; i < htmlArr.length; i++) {
+      templateHtml = templateHtml.replace(
+        new RegExp(`{{${path.parse(files[i]).name}}}`, 'g'),
+        htmlArr[i],
+      );
+    }
+    fs.writeFile(path.join(dest, 'index.html'), templateHtml);
+  } catch (err) {
+    console.log(err);
+  }
 }
 
-function copyDir(src, dest) {
-  fs.access(dest, (err) => {
-    if (err) {
-      if (err.code === 'ENOENT') {
-        mainLogic(src, dest);
-      } else throw err;
-    } else {
-      fs.rm(dest, { recursive: true, force: true }, (err) => {
-        if (err) throw err;
-        mainLogic(src, dest);
-      });
+async function bundleCss(dest) {
+  try {
+    const promises = [];
+    const files = await fs.readdir(path.join(__dirname, 'styles'));
+    for (let file of files) {
+      const stat = await fs.stat(path.join(__dirname, 'styles/', file));
+      if (!stat.isDirectory() && path.extname(file).slice(1) === 'css')
+        promises.push(
+          fs.readFile(path.join(__dirname, 'styles/', file), 'utf-8'),
+        );
     }
-  });
+    const styleCss = await Promise.all(promises);
+    fs.writeFile(path.join(dest, 'style.css'), styleCss.join(''));
+  } catch (err) {
+    console.log(err);
+  }
 }
 
-function mainLogic(src, dest) {
-  fs.mkdir(dest, { recursive: true }, (err) => {
-    if (err) throw err;
-
-    fs.readdir(src, (err, files) => {
-      if (err) throw err;
-
-      for (let file of files) {
-        fs.stat(path.join(src, '/', file), (err, stat) => {
-          if (err) throw err;
-
-          if (!stat.isDirectory())
-            fs.copyFile(
-              path.join(src, '/', file),
-              path.join(dest, '/', file),
-              (err) => {
-                if (err) throw err;
-              },
-            );
-          else copyDir(path.join(src, '/', file), path.join(dest, '/', file)); // подпапки рекурсивно копируем
-        });
-      }
-    });
-  });
+async function copyDir(src, dest) {
+  try {
+    await fs.rm(dest, { recursive: true, force: true });
+    await fs.mkdir(dest, { recursive: true });
+    const files = await fs.readdir(src);
+    for (let file of files) {
+      const fileSrc = path.join(src, '/', file);
+      const fileDest = path.join(dest, '/', file);
+      const stat = await fs.stat(fileSrc);
+      if (!stat.isDirectory()) fs.copyFile(fileSrc, fileDest);
+      else copyDir(fileSrc, fileDest);
+    }
+  } catch (err) {
+    console.log(err);
+  }
 }
